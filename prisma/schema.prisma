@@ -1,0 +1,26 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum EventType {
+  ORDER_PLACED
+  ORDER_MATCHED
+  ORDER_CANCELLED
+  ORDER_PARTIALLY_FILLED
+}
+
+// The Event Store
+model OrderEvent {
+  sequenceId  BigInt    @id @default(autoincrement()) 
+  instrument  String    @db.VarChar(20)
+  eventType   EventType
+  orderId     String    @db.Uuid
+  payload     Json      @db.JsonB
+  createdAt   DateTime  @default(now()) @db.Timestamptz
+  @@index([instrument, sequenceId(sort: Asc)])
+}
