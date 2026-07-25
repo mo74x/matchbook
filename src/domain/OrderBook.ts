@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Order } from './types/order.types';
 /**
  * A FIFO queue for a specific price level.
@@ -29,6 +30,19 @@ class PriceLevel {
  * The in-memory Order Book for a single instrument.
  */
 export class OrderBook {
+  /**
+   * Removes an empty ask price level from the book.
+   */
+  public removeAskLevel(price: number): void {
+    this.asks.delete(price);
+  }
+
+  /**
+   * Removes an empty bid price level from the book.
+   */
+  public removeBidLevel(price: number): void {
+    this.bids.delete(price);
+  }
   public readonly instrument: string;
 
   // Maps a price to its corresponding PriceLevel queue
