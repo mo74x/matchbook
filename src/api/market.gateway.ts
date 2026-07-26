@@ -28,7 +28,7 @@ export class MarketGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * Broadcasts executed trades to all listening frontend clients.
    */
   broadcastTrades(trades: Trade[]) {
-    if (trades.length === 0) return;
+    if (trades.length === 0 || !this.server) return;
 
     // Broadcast to the 'market-data' room
     this.server.to('market-data').emit('trades_executed', trades);
@@ -42,6 +42,8 @@ export class MarketGateway implements OnGatewayConnection, OnGatewayDisconnect {
     bestBid: number | null,
     bestAsk: number | null,
   ) {
+    if (!this.server) return;
+
     this.server.to('market-data').emit('book_updated', {
       instrument,
       bestBid,

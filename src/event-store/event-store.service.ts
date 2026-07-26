@@ -6,7 +6,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrderBook } from '../domain/OrderBook';
 import { Order } from '../domain/types/order.types';
-import { EventType } from 'generated/prisma/enums';
+import { EventType } from '../../generated/prisma/enums';
 
 @Injectable()
 export class EventStoreService {
