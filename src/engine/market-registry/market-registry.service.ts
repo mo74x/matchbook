@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { EventStoreService } from 'src/event-store/event-store.service';
 import { MarketProcessor } from '../market-processor';
 import { Order } from 'src/domain/types/order.types';
+import { MarketGateway } from '../../api/market.gateway';
 
 @Injectable()
 export class MarketRegistryService implements OnModuleInit {
@@ -9,7 +10,10 @@ export class MarketRegistryService implements OnModuleInit {
   private processors = new Map<string, MarketProcessor>();
   private readonly supportedInstruments = ['BTC-USD', 'ETH-USD'];
 
-  constructor(private readonly eventStore: EventStoreService) {}
+  constructor(
+    private readonly eventStore: EventStoreService,
+    private readonly marketGateway: MarketGateway,
+  ) {}
 
   /**
    * On application startup, recover all supported markets from the DB.
@@ -43,7 +47,16 @@ export class MarketRegistryService implements OnModuleInit {
       );
     }
 
-    return await processor.enqueueOrder(order);
+    const result = await processor.enqueueOrder(order);
+
+    if (result.trades.length > 0) {
+      this.marketGateway.broadcastTrades(result.trades);
+    }
+    const bestBid = processor.book.getBestBid()?.price || null;
+    const bestAsk = processor.book.getBestAsk()?.price || null;
+    this.marketGateway.broadcastBookUpdate(order.instrument, bestBid, bestAsk);
+
+    return result;
   }
 
   /**
