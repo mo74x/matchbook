@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unused-expressions */
 import { Order } from './types/order.types';
 /**
  * A FIFO queue for a specific price level.
@@ -44,10 +44,12 @@ export class OrderBook {
     this.bids.delete(price);
   }
   public readonly instrument: string;
-
   // Maps a price to its corresponding PriceLevel queue
   private bids = new Map<number, PriceLevel>();
   private asks = new Map<number, PriceLevel>();
+
+  // Maps Order ID -> Order Object for quick retrieval/mutation
+  private orderMap = new Map<string, Order>();
 
   constructor(instrument: string) {
     this.instrument = instrument;
@@ -64,6 +66,31 @@ export class OrderBook {
     }
 
     book.get(order.price)!.addOrder(order);
+
+    // Add to lookup map
+    this.orderMap.set(order.id, order);
+  }
+  // Returns an order by its ID
+  public getOrder(id: string): Order | undefined {
+    return this.orderMap.get(id);
+  }
+  // Removes an order from the book
+  public removeOrder(id: string): void {
+    const order = this.orderMap.get(id);
+    if (!order) return;
+
+    const book = order.side === 'BID' ? this.bids : this.asks;
+    const level = book.get(order.price);
+
+    if (level) {
+      level.removeOrder(id);
+      if (level.orders.length === 0) {
+        order.side === 'BID'
+          ? this.removeBidLevel(order.price)
+          : this.removeAskLevel(order.price);
+      }
+    }
+    this.orderMap.delete(id);
   }
 
   /**
