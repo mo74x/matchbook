@@ -122,4 +122,107 @@ export class EventStoreService {
       }
     }
   }
+
+  /**
+   * Fetches recent trades (ORDER_MATCHED events) from the database.
+   */
+  async getTrades(instrument?: string, limit: number = 50) {
+    const events = await this.prisma.orderEvent.findMany({
+      where: {
+        eventType: EventType.ORDER_MATCHED,
+        ...(instrument ? { instrument } : {}),
+      },
+      orderBy: { sequenceId: 'desc' },
+      take: limit,
+    });
+
+    return events.map((e) => {
+      const payload = e.payload as unknown as OrderMatchedPayload;
+      return {
+        tradeId: payload.tradeId,
+        instrument: e.instrument,
+        takerOrderId: e.orderId,
+        makerOrderId: payload.counterpartyOrderId,
+        price: payload.matchedPrice ?? payload.price,
+        quantity: payload.matchedQuantity,
+        executedAt: e.createdAt,
+      };
+    });
+  }
+
+  /**
+   * Fetches the complete event history and current status for a given order ID.
+   */
+  async getOrderStatus(orderId: string) {
+    const events = await this.prisma.orderEvent.findMany({
+      where: { orderId },
+      orderBy: { sequenceId: 'asc' },
+    });
+
+    if (events.length === 0) {
+      return null;
+    }
+
+    const placedEvent = events.find(
+      (e) => e.eventType === EventType.ORDER_PLACED,
+    );
+    const cancelEvent = events.find(
+      (e) => e.eventType === EventType.ORDER_CANCELLED,
+    );
+
+    let status = 'OPEN';
+    let remainingQuantity = 0;
+    let initialQuantity = 0;
+    let side = '';
+    let price = 0;
+    let instrument = '';
+
+    if (placedEvent) {
+      const p = placedEvent.payload as unknown as OrderPlacedPayload;
+      initialQuantity = p.quantity;
+      remainingQuantity = p.quantity;
+      side = p.side;
+      price = p.price;
+      instrument = placedEvent.instrument;
+    }
+
+    let totalFilled = 0;
+    for (const e of events) {
+      if (e.eventType === EventType.ORDER_MATCHED) {
+        const p = e.payload as unknown as OrderMatchedPayload;
+        totalFilled += p.matchedQuantity;
+      } else if (e.eventType === EventType.ORDER_PARTIALLY_FILLED) {
+        const p = e.payload as unknown as OrderPartiallyFilledPayload;
+        remainingQuantity = p.remainingQuantity;
+      }
+    }
+
+    if (initialQuantity > 0) {
+      remainingQuantity = Math.max(0, initialQuantity - totalFilled);
+    }
+
+    if (cancelEvent) {
+      status = 'CANCELLED';
+    } else if (remainingQuantity === 0 && initialQuantity > 0) {
+      status = 'FILLED';
+    } else if (totalFilled > 0 && remainingQuantity > 0) {
+      status = 'PARTIALLY_FILLED';
+    }
+
+    return {
+      orderId,
+      instrument,
+      side,
+      price,
+      initialQuantity,
+      remainingQuantity,
+      status,
+      events: events.map((e) => ({
+        sequenceId: e.sequenceId.toString(),
+        eventType: e.eventType,
+        payload: e.payload,
+        createdAt: e.createdAt,
+      })),
+    };
+  }
 }

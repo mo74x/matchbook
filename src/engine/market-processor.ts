@@ -4,19 +4,30 @@ import { Order } from '../domain/types/order.types';
 import { MatchingEngine, MatchingResult } from '../domain/Engine';
 import { EventStoreService } from '../event-store/event-store.service';
 import { EventToPersist } from '../domain/types/event.types';
+import { EventType } from '../../generated/prisma/enums';
 
-interface OrderCallbacks {
-  resolve: (result: MatchingResult) => void;
+export interface CancelResult {
+  success: boolean;
+  orderId: string;
+  message?: string;
+}
+
+interface TaskCallbacks {
+  resolve: (result: any) => void;
   reject: (error: any) => void;
 }
+
+type ProcessorTask =
+  | { type: 'PLACE'; id: string; order: Order }
+  | { type: 'CANCEL'; id: string; orderId: string };
 
 export class MarketProcessor {
   // The actual state of the market
   public readonly book: OrderBook;
 
   // The queue to prevent async race conditions
-  private orderQueue: Order[] = [];
-  private pendingCallbacks = new Map<string, OrderCallbacks>();
+  private taskQueue: ProcessorTask[] = [];
+  private pendingCallbacks = new Map<string, TaskCallbacks>();
   private isProcessing = false;
   private isHalted = false;
   private readonly logger: Logger;
@@ -45,7 +56,28 @@ export class MarketProcessor {
 
     return new Promise((resolve, reject) => {
       this.pendingCallbacks.set(order.id, { resolve, reject });
-      this.orderQueue.push(order);
+      this.taskQueue.push({ type: 'PLACE', id: order.id, order });
+      void this.processQueue();
+    });
+  }
+
+  /**
+   * Pushes a cancellation task into the queue and triggers processing.
+   * Returns a Promise resolving to CancelResult.
+   */
+  public cancelOrder(orderId: string): Promise<CancelResult> {
+    if (this.isHalted) {
+      return Promise.reject(
+        new Error(
+          `Market ${this.instrument} is currently halted due to persistence failure.`,
+        ),
+      );
+    }
+
+    const taskId = `cancel-${orderId}-${Date.now()}`;
+    return new Promise((resolve, reject) => {
+      this.pendingCallbacks.set(taskId, { resolve, reject });
+      this.taskQueue.push({ type: 'CANCEL', id: taskId, orderId });
       void this.processQueue();
     });
   }
@@ -55,37 +87,74 @@ export class MarketProcessor {
    */
   private async processQueue() {
     // If already processing or halted, do nothing
-    if (this.isProcessing || this.orderQueue.length === 0 || this.isHalted)
+    if (this.isProcessing || this.taskQueue.length === 0 || this.isHalted)
       return;
 
     this.isProcessing = true;
 
-    while (this.orderQueue.length > 0 && !this.isHalted) {
-      // Dequeue the oldest order
-      const order = this.orderQueue.shift()!;
-      const callbacks = this.pendingCallbacks.get(order.id);
-      this.pendingCallbacks.delete(order.id);
+    while (this.taskQueue.length > 0 && !this.isHalted) {
+      // Dequeue the oldest task
+      const task = this.taskQueue.shift()!;
+      const callbacks = this.pendingCallbacks.get(task.id);
+      this.pendingCallbacks.delete(task.id);
 
       try {
-        // Run the pure, synchronous matching algorithm
-        const result = MatchingEngine.processOrder(order, this.book);
+        if (task.type === 'PLACE') {
+          // Run the pure, synchronous matching algorithm
+          const result = MatchingEngine.processOrder(task.order, this.book);
 
-        // Format the events for the database
-        const eventsToSave: EventToPersist[] = result.events.map((event) => ({
-          instrument: this.instrument,
-          eventType: event.eventType,
-          orderId: event.orderId,
-          payload: event.payload,
-        }));
+          // Format the events for the database
+          const eventsToSave: EventToPersist[] = result.events.map((event) => ({
+            instrument: this.instrument,
+            eventType: event.eventType,
+            orderId: event.orderId,
+            payload: event.payload,
+          }));
 
-        // Await database persistence
-        await this.eventStore.appendEvents(eventsToSave);
+          // Await database persistence
+          await this.eventStore.appendEvents(eventsToSave);
 
-        // Resolve the caller waiting for this specific order
-        callbacks?.resolve(result);
+          // Resolve the caller waiting for this specific order
+          callbacks?.resolve(result);
+        } else if (task.type === 'CANCEL') {
+          const restingOrder = this.book.getOrder(task.orderId);
+          if (!restingOrder) {
+            callbacks?.resolve({
+              success: false,
+              orderId: task.orderId,
+              message: 'Order not found resting in order book',
+            });
+            continue;
+          }
+
+          const { price, side, remainingQuantity } = restingOrder;
+
+          // Remove resting order from in-memory book
+          this.book.removeOrder(task.orderId);
+
+          // Persist ORDER_CANCELLED event
+          const cancelEvent: EventToPersist = {
+            instrument: this.instrument,
+            eventType: EventType.ORDER_CANCELLED,
+            orderId: task.orderId,
+            payload: {
+              price,
+              side,
+              remainingQuantity,
+            },
+          };
+
+          await this.eventStore.appendEvents([cancelEvent]);
+
+          callbacks?.resolve({
+            success: true,
+            orderId: task.orderId,
+            message: 'Order cancelled successfully',
+          });
+        }
       } catch (error) {
         this.logger.error(
-          `CRITICAL: Persistence failed for order ${order.id} in market ${this.instrument}. Halting market.`,
+          `CRITICAL: Persistence failed for task ${task.id} in market ${this.instrument}. Halting market.`,
           error,
         );
 
@@ -93,11 +162,11 @@ export class MarketProcessor {
         this.isHalted = true;
         callbacks?.reject(error);
 
-        // Reject all remaining enqueued orders
-        while (this.orderQueue.length > 0) {
-          const queuedOrder = this.orderQueue.shift()!;
-          const cb = this.pendingCallbacks.get(queuedOrder.id);
-          this.pendingCallbacks.delete(queuedOrder.id);
+        // Reject all remaining enqueued tasks
+        while (this.taskQueue.length > 0) {
+          const queuedTask = this.taskQueue.shift()!;
+          const cb = this.pendingCallbacks.get(queuedTask.id);
+          this.pendingCallbacks.delete(queuedTask.id);
           cb?.reject(
             new Error(
               `Market ${this.instrument} was halted due to persistence failure.`,

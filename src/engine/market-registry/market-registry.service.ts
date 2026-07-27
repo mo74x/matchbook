@@ -68,4 +68,25 @@ export class MarketRegistryService implements OnModuleInit {
 
     return processor.book;
   }
+
+  /**
+   * Routes a cancellation request to the correct instrument processor.
+   */
+  public async cancelOrder(instrument: string, orderId: string) {
+    const processor = this.processors.get(instrument);
+
+    if (!processor) {
+      throw new Error(`Market ${instrument} is not supported or not loaded.`);
+    }
+
+    const result = await processor.cancelOrder(orderId);
+
+    if (result.success) {
+      const bestBid = processor.book.getBestBid()?.price || null;
+      const bestAsk = processor.book.getBestAsk()?.price || null;
+      this.marketGateway.broadcastBookUpdate(instrument, bestBid, bestAsk);
+    }
+
+    return result;
+  }
 }

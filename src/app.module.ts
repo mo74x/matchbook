@@ -5,11 +5,12 @@ import { PrismaService } from './prisma/prisma.service';
 import { EventStoreService } from './event-store/event-store.service';
 import { MarketRegistryService } from './engine/market-registry/market-registry.service';
 import { OrdersController } from './api/orders.controller';
+import { TradesController } from './api/trades.controller';
 import { MarketGateway } from './api/market.gateway';
 
 @Module({
   imports: [],
-  controllers: [AppController, OrdersController],
+  controllers: [AppController, OrdersController, TradesController],
   providers: [
     AppService,
     PrismaService,

@@ -140,4 +140,41 @@ export class OrderBook {
     if (this.bestAskPrice === null) return undefined;
     return this.asks.get(this.bestAskPrice);
   }
+
+  /**
+   * Returns aggregated order book depth up to the requested depth level.
+   * Bids are sorted descending by price; Asks are sorted ascending by price.
+   */
+  public getDepth(depth: number = 20): {
+    bids: Array<{ price: number; quantity: number }>;
+    asks: Array<{ price: number; quantity: number }>;
+  } {
+    const sortedBidPrices = Array.from(this.bids.keys())
+      .sort((a, b) => b - a)
+      .slice(0, depth);
+
+    const sortedAskPrices = Array.from(this.asks.keys())
+      .sort((a, b) => a - b)
+      .slice(0, depth);
+
+    const bids = sortedBidPrices.map((price) => {
+      const level = this.bids.get(price)!;
+      const quantity = level.orders.reduce(
+        (sum, order) => sum + order.remainingQuantity,
+        0,
+      );
+      return { price, quantity };
+    });
+
+    const asks = sortedAskPrices.map((price) => {
+      const level = this.asks.get(price)!;
+      const quantity = level.orders.reduce(
+        (sum, order) => sum + order.remainingQuantity,
+        0,
+      );
+      return { price, quantity };
+    });
+
+    return { bids, asks };
+  }
 }

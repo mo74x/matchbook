@@ -106,4 +106,27 @@ describe('MatchingEngine', () => {
     expect(book.getBestAsk()?.price).toBe(50000);
     expect(book.getBestAsk()?.orders[0].remainingQuantity).toBe(2);
   });
+
+  it('should return aggregated L2 order book depth sorted correctly', () => {
+    book.add(createOrder('b1', 'BID', 50000, 10));
+    book.add(createOrder('b2', 'BID', 50000, 5));
+    book.add(createOrder('b3', 'BID', 49900, 8));
+
+    book.add(createOrder('a1', 'ASK', 51000, 12));
+    book.add(createOrder('a2', 'ASK', 51500, 6));
+
+    const depth = book.getDepth(10);
+
+    // Bids should be sorted descending by price
+    expect(depth.bids).toEqual([
+      { price: 50000, quantity: 15 },
+      { price: 49900, quantity: 8 },
+    ]);
+
+    // Asks should be sorted ascending by price
+    expect(depth.asks).toEqual([
+      { price: 51000, quantity: 12 },
+      { price: 51500, quantity: 6 },
+    ]);
+  });
 });
