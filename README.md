@@ -43,10 +43,14 @@ Supports **LIMIT**, **MARKET**, **IOC** (Immediate or Cancel), and **FOK** (Fill
 - [WebSocket Events](#websocket-events)
 - [Authentication](#authentication)
 - [Observability](#observability)
+  - [Prometheus Metrics Reference](#prometheus-metrics-reference)
+  - [Prometheus & Grafana Monitoring Stack](#prometheus--grafana-monitoring-stack)
+  - [Structured Logging & Request Correlation](#structured-logging--request-correlation)
 - [Getting Started](#getting-started)
 - [Docker Deployment](#docker-deployment)
+- [Kubernetes & Helm Deployment](#kubernetes--helm-deployment)
 - [Running the Benchmark](#running-the-benchmark)
-- [Testing](#testing)
+- [Testing & CI Performance Gate](#testing--ci-performance-gate)
 - [Configuration](#configuration)
 - [Technology Stack](#technology-stack)
 
@@ -197,57 +201,87 @@ flowchart TD
 matchbook/
 ├── .github/
 │   └── workflows/
-│       └── ci.yml                  # GitHub Actions CI/CD pipeline
+│       └── ci.yml                            # GitHub Actions CI/CD + SLA Gate
+├── deploy/
+│   └── helm/
+│       └── matchbook/                        # Helm v3 Chart package
+│           ├── Chart.yaml                    # Helm chart metadata
+│           ├── values.yaml                   # Configurable values
+│           └── templates/                    # Deployment, Service, HPA, Ingress templates
+├── grafana/
+│   ├── dashboards/
+│   │   └── matchbook.json                    # Auto-provisioned Grafana dashboard model
+│   └── provisioning/                         # Grafana datasource and provider configuration
+├── k8s/                                      # Production Kubernetes Kustomize manifests
+│   ├── namespace.yaml                        # matchbook namespace
+│   ├── configmap.yaml                        # Environment ConfigMap
+│   ├── secret.yaml                           # Database & API Key Secrets
+│   ├── postgres-statefulset.yaml             # PostgreSQL 15 StatefulSet + PVC
+│   ├── redis-deployment.yaml                 # Redis Deployment & Service
+│   ├── app-deployment.yaml                   # App Deployment (liveness/readiness probes, limits)
+│   ├── app-service.yaml                      # ClusterIP Service
+│   ├── app-hpa.yaml                          # HorizontalPodAutoscaler (2-10 replicas)
+│   └── kustomization.yaml                    # Kustomize entrypoint (kubectl apply -k k8s/)
 ├── prisma/
-│   ├── schema.prisma               # Database schema (OrderEvent + OrderBookSnapshot)
-│   └── migrations/                 # Prisma migration history
+│   ├── schema.prisma                         # Database schema (OrderEvent + OrderBookSnapshot)
+│   └── migrations/                           # Prisma migration history
 ├── generated/
-│   └── prisma/                     # Auto-generated Prisma client (do not edit)
+│   └── prisma/                               # Auto-generated Prisma client (do not edit)
+├── scripts/
+│   └── verify-benchmark-sla.ts               # CI Performance SLA Gate verification script
 ├── src/
 │   ├── adapters/
-│   │   └── redis-io.adapter.ts     # Socket.IO Redis adapter for multi-node scaling
+│   │   └── redis-io.adapter.ts               # Socket.IO Redis adapter for multi-node scaling
 │   ├── api/
-│   │   ├── orders.controller.ts    # REST: order submission, book, depth, status queries
-│   │   ├── trades.controller.ts    # REST: trade history queries
-│   │   ├── health.controller.ts    # GET /health system health check
-│   │   ├── market.gateway.ts       # WebSocket gateway (trades, book, depth)
+│   │   ├── orders.controller.ts              # REST: order submission, book, depth, status queries
+│   │   ├── trades.controller.ts              # REST: trade history queries
+│   │   ├── health.controller.ts              # GET /health system health check
+│   │   ├── market.gateway.ts                 # WebSocket gateway (trades, book, depth)
 │   │   ├── guards/
-│   │   │   └── api-key.guard.ts    # x-api-key header authentication guard
+│   │   │   ├── api-key.guard.ts              # x-api-key header authentication guard
+│   │   │   └── jwt-auth.guard.ts             # JWT authentication guard
 │   │   └── dto/
-│   │       └── create-order.dto.ts # Request validation + Swagger decorators
+│   │       └── create-order.dto.ts           # Request validation + Swagger decorators
+│   ├── auth/                                 # JWT authentication module & decorators
+│   │   ├── auth.service.ts
+│   │   └── auth.module.ts
 │   ├── common/
-│   │   └── json-logger.service.ts  # Structured JSON logger for production
-│   ├── domain/                     # Pure domain logic, no framework dependencies
-│   │   ├── Engine.ts               # Price-Time Priority matching algorithm
-│   │   ├── Engine.spec.ts          # Unit tests (LIMIT, MARKET, IOC, FOK, depth)
-│   │   ├── OrderBook.ts            # In-memory order book (bids, asks, price levels)
+│   │   ├── correlation.context.ts            # Node AsyncLocalStorage context store
+│   │   ├── request-id.middleware.ts          # Request ID correlation middleware
+│   │   └── json-logger.service.ts            # Structured JSON logger with sampling
+│   ├── domain/                               # Pure domain logic, no framework dependencies
+│   │   ├── Engine.ts                         # Price-Time Priority matching algorithm
+│   │   ├── Engine.spec.ts                    # Unit tests (LIMIT, MARKET, IOC, FOK, depth)
+│   │   ├── OrderBook.ts                      # In-memory order book (bids, asks, price levels)
 │   │   └── types/
-│   │       ├── order.types.ts      # Order, Trade, OrderType interfaces
-│   │       └── event.types.ts      # Event payload interfaces and discriminated union
-│   ├── engine/                     # Orchestration layer
-│   │   ├── market-processor.ts     # Sequential PLACE/CANCEL queue per instrument
+│   │       ├── order.types.ts                # Order, Trade, OrderType interfaces
+│   │       └── event.types.ts                # Event payload interfaces and discriminated union
+│   ├── engine/                               # Orchestration layer
+│   │   ├── market-processor.ts               # Sequential PLACE/CANCEL queue per instrument
 │   │   └── market-registry/
-│   │       ├── market-registry.service.ts       # Multi-instrument router + lifecycle
-│   │       └── market-registry.service.spec.ts  # Integration tests
+│   │       ├── market-registry.service.ts    # Multi-instrument router + lifecycle
+│   │       └── market-registry.service.spec.ts
 │   ├── event-store/
-│   │   ├── event-store.service.ts       # Event persistence, snapshots, and recovery
-│   │   └── event-store.service.spec.ts  # Unit tests
+│   │   ├── event-store.service.ts            # Event persistence, snapshots, and recovery
+│   │   └── event-store.service.spec.ts
 │   ├── metrics/
-│   │   ├── metrics.service.ts      # Prometheus-style metrics collector
-│   │   └── metrics.controller.ts   # GET /metrics endpoint
+│   │   ├── metrics.service.ts                # Prometheus-style metrics collector (prom-client)
+│   │   └── metrics.controller.ts             # GET /metrics endpoint
 │   ├── prisma/
-│   │   ├── prisma.service.ts       # Prisma client wrapper with driver adapter
+│   │   ├── prisma.service.ts                 # Prisma client wrapper with driver adapter
 │   │   └── prisma.service.spec.ts
-│   ├── app.module.ts               # NestJS root module
-│   ├── main.ts                     # Application entrypoint (Swagger, Logger, Redis)
-│   └── benchmark.ts                # Load testing script (10,000 concurrent orders)
+│   ├── app.module.ts                         # NestJS root module
+│   ├── main.ts                               # Application entrypoint (Swagger, Logger, Redis)
+│   └── benchmark.ts                          # Load testing script (p50/p95/p99 percentiles)
 ├── test/
-│   ├── app.e2e-spec.ts             # E2E integration tests
-│   └── jest-e2e.json               # Jest E2E configuration
-├── Dockerfile                      # Multi-stage production Docker build
-├── docker-compose.yml              # PostgreSQL + application containers
-├── prisma.config.ts                # Prisma v7 configuration
-├── tsconfig.json                   # TypeScript configuration
+│   ├── app.e2e-spec.ts                       # E2E integration tests
+│   └── jest-e2e.json                         # Jest E2E configuration
+├── benchmark-results.json                    # Exported JSON benchmark artifact
+├── Dockerfile                                # Multi-stage production Docker build
+├── docker-compose.yml                        # PostgreSQL, App, Redis, Prometheus, Grafana
+├── prometheus.yml                            # Prometheus scraping configuration
+├── prisma.config.ts                          # Prisma v7 configuration
+├── tsconfig.json                             # TypeScript configuration
 └── package.json
 ```
 
