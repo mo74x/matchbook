@@ -6,6 +6,20 @@ Supports **LIMIT**, **MARKET**, **IOC** (Immediate or Cancel), and **FOK** (Fill
 
 [![CI/CD](https://github.com/mo74x/matchbook/actions/workflows/ci.yml/badge.svg)](https://github.com/mo74x/matchbook/actions/workflows/ci.yml)
 
+### Built With
+
+![Node.js](https://img.shields.io/badge/Node.js-20+-339933?style=for-the-badge&logo=node.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![NestJS](https://img.shields.io/badge/NestJS-11-E0234E?style=for-the-badge&logo=nestjs&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![Prisma](https://img.shields.io/badge/Prisma-7-2D3748?style=for-the-badge&logo=prisma&logoColor=white)
+![Socket.IO](https://img.shields.io/badge/Socket.IO-4-010101?style=for-the-badge&logo=socket.io&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=for-the-badge&logo=redis&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Swagger](https://img.shields.io/badge/Swagger-OpenAPI-85EA2D?style=for-the-badge&logo=swagger&logoColor=black)
+![Jest](https://img.shields.io/badge/Jest-Tests-C21325?style=for-the-badge&logo=jest&logoColor=white)
+![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-CI/CD-2088FF?style=for-the-badge&logo=github-actions&logoColor=white)
+
 ---
 
 ## Table of Contents
@@ -752,21 +766,21 @@ All configuration is via environment variables. Create a `.env` file in the proj
 
 ## Technology Stack
 
-| Component         | Technology                                    |
-|-------------------|-----------------------------------------------|
-| Runtime           | Node.js >= 20.19.0                            |
-| Framework         | NestJS 11                                     |
-| Language          | TypeScript 5.x                                |
-| Database          | PostgreSQL 15                                 |
-| ORM               | Prisma 7 with `@prisma/adapter-pg` driver adapter |
-| WebSockets        | Socket.IO via `@nestjs/websockets`            |
-| WS Scaling        | Redis adapter (`@socket.io/redis-adapter`)    |
-| Validation        | class-validator, class-transformer            |
-| API Docs          | Swagger / OpenAPI (`@nestjs/swagger`)         |
-| Rate Limiting     | `@nestjs/throttler`                           |
-| Containerization  | Docker (multi-stage) + Docker Compose         |
-| CI/CD             | GitHub Actions                                |
-| Testing           | Jest, ts-jest, Supertest                      |
+| Component | Technology | Badge |
+|-----------|------------|-------|
+| **Runtime** | Node.js >= 20.19.0 | ![Node.js](https://img.shields.io/badge/Node.js-20+-339933?style=flat-square&logo=node.js&logoColor=white) |
+| **Language** | TypeScript 5.x | ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white) |
+| **Framework** | NestJS 11 | ![NestJS](https://img.shields.io/badge/NestJS-11-E0234E?style=flat-square&logo=nestjs&logoColor=white) |
+| **Database** | PostgreSQL 15 | ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?style=flat-square&logo=postgresql&logoColor=white) |
+| **ORM** | Prisma 7 (`@prisma/adapter-pg`) | ![Prisma](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white) |
+| **WebSockets** | Socket.IO via `@nestjs/websockets` | ![Socket.IO](https://img.shields.io/badge/Socket.IO-4-010101?style=flat-square&logo=socket.io&logoColor=white) |
+| **WS Scaling** | Redis adapter (`@socket.io/redis-adapter`) | ![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat-square&logo=redis&logoColor=white) |
+| **Validation** | class-validator, class-transformer | ![npm](https://img.shields.io/badge/class--validator-✓-CB3837?style=flat-square&logo=npm&logoColor=white) |
+| **API Docs** | Swagger / OpenAPI (`@nestjs/swagger`) | ![Swagger](https://img.shields.io/badge/Swagger-OpenAPI-85EA2D?style=flat-square&logo=swagger&logoColor=black) |
+| **Rate Limiting** | `@nestjs/throttler` | ![Shield](https://img.shields.io/badge/Throttler-100_req/min-orange?style=flat-square&logo=nestjs&logoColor=white) |
+| **Containerization** | Docker (multi-stage) + Docker Compose | ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white) |
+| **CI/CD** | GitHub Actions | ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-CI/CD-2088FF?style=flat-square&logo=github-actions&logoColor=white) |
+| **Testing** | Jest, ts-jest, Supertest | ![Jest](https://img.shields.io/badge/Jest-Tests-C21325?style=flat-square&logo=jest&logoColor=white) |
 
 ---
 
