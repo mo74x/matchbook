@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { EventStoreService } from 'src/event-store/event-store.service';
+import { EventStoreService } from '../../event-store/event-store.service';
 import { MarketProcessor } from '../market-processor';
-import { Order } from 'src/domain/types/order.types';
+import { Order } from '../../domain/types/order.types';
 import { MarketGateway } from '../../api/market.gateway';
 
 @Injectable()

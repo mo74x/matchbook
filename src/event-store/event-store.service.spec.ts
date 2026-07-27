@@ -8,6 +8,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { EventStoreService } from './event-store.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventType } from '../../generated/prisma/enums';
+import { EventToPersist } from '../domain/types/event.types';
 
 const INSTRUMENT = 'BTC-USD';
 let seqCounter = 1n;
@@ -57,7 +58,7 @@ describe('EventStoreService', () => {
     });
 
     it('should batch-insert events via createMany', async () => {
-      const events = [
+      const events: EventToPersist[] = [
         {
           instrument: INSTRUMENT,
           eventType: EventType.ORDER_PLACED,

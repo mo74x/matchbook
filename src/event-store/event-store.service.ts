@@ -1,16 +1,27 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrderBook } from '../domain/OrderBook';
 import { Order } from '../domain/types/order.types';
+import {
+  EventToPersist,
+  OrderPlacedPayload,
+  OrderMatchedPayload,
+  OrderPartiallyFilledPayload,
+} from '../domain/types/event.types';
 import { EventType } from '../../generated/prisma/enums';
+
+export interface StoredOrderEvent {
+  sequenceId: bigint;
+  instrument: string;
+  eventType: EventType;
+  orderId: string;
+  payload: any;
+  createdAt: Date;
+}
 
 @Injectable()
 export class EventStoreService {
-  [x: string]: any;
   private readonly logger = new Logger(EventStoreService.name);
 
   constructor(private readonly prisma: PrismaService) {}
@@ -19,7 +30,7 @@ export class EventStoreService {
    * This is the "write-side" operation for the Event Sourcing pattern.
    * It uses Prisma's `createMany` for efficient batch insertion.
    */
-  async appendEvents(events: any[]): Promise<void> {
+  async appendEvents(events: EventToPersist[]): Promise<void> {
     if (events.length === 0) return;
 
     await this.prisma.orderEvent.createMany({
@@ -27,7 +38,7 @@ export class EventStoreService {
         instrument: e.instrument,
         eventType: e.eventType,
         orderId: e.orderId,
-        payload: e.payload,
+        payload: e.payload as any,
       })),
     });
   }
@@ -62,19 +73,20 @@ export class EventStoreService {
   /**
    * Projects a single event onto the OrderBook state.
    */
-  private applyEventToBook(book: OrderBook, event: any): void {
+  private applyEventToBook(book: OrderBook, event: StoredOrderEvent): void {
     const payload = event.payload;
 
     switch (event.eventType) {
       case EventType.ORDER_PLACED: {
+        const p = payload as OrderPlacedPayload;
         // Hydrate the resting order
         const order: Order = {
           id: event.orderId,
           instrument: event.instrument,
-          side: payload.side,
-          price: payload.price,
-          initialQuantity: payload.quantity,
-          remainingQuantity: payload.quantity,
+          side: p.side,
+          price: p.price,
+          initialQuantity: p.quantity,
+          remainingQuantity: p.quantity,
           timestamp: event.createdAt.getTime(),
         };
         book.add(order);
@@ -82,18 +94,20 @@ export class EventStoreService {
       }
 
       case EventType.ORDER_PARTIALLY_FILLED: {
+        const p = payload as OrderPartiallyFilledPayload;
         const restingOrder = book.getOrder(event.orderId);
         if (restingOrder) {
-          restingOrder.remainingQuantity = payload.remainingQuantity;
+          restingOrder.remainingQuantity = p.remainingQuantity;
         }
         break;
       }
 
       case EventType.ORDER_MATCHED: {
+        const p = payload as OrderMatchedPayload;
         // ORDER_MATCHED contains the counterpartyOrderId (the resting order)
-        const restingOrder = book.getOrder(payload.counterpartyOrderId);
+        const restingOrder = book.getOrder(p.counterpartyOrderId);
         if (restingOrder) {
-          restingOrder.remainingQuantity -= payload.matchedQuantity;
+          restingOrder.remainingQuantity -= p.matchedQuantity;
           // If the resting order is fully consumed, remove it
           if (restingOrder.remainingQuantity <= 0) {
             book.removeOrder(restingOrder.id);

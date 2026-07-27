@@ -40,12 +40,28 @@ export type OrderEventPayload =
       data: OrderPartiallyFilledPayload;
     };
 
+export type PendingDomainEventPayload =
+  | OrderPlacedPayload
+  | OrderMatchedPayload
+  | OrderCancelledPayload
+  | OrderPartiallyFilledPayload;
+
+export interface PendingDomainEvent {
+  eventType: EventType;
+  orderId: string;
+  payload: PendingDomainEventPayload;
+}
+
+export interface EventToPersist extends PendingDomainEvent {
+  instrument: string;
+}
+
 // The final shape of an event after it is fetched from the DB
 export interface DomainOrderEvent {
   sequenceId: bigint;
   instrument: string;
   eventType: EventType;
   orderId: string;
-  payload: OrderEventPayload['data'];
+  payload: PendingDomainEventPayload;
   createdAt: Date;
 }

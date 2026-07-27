@@ -1,11 +1,12 @@
 import { Order, Trade } from './types/order.types';
+import { PendingDomainEvent } from './types/event.types';
 import { EventType } from '../../generated/prisma/enums';
 import { OrderBook } from './OrderBook';
 import { randomUUID } from 'crypto';
 
 export interface MatchingResult {
   trades: Trade[];
-  events: any[]; //properly with our DomainOrderEvent payloads
+  events: PendingDomainEvent[];
 }
 
 export class MatchingEngine {
