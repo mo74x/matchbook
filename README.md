@@ -15,6 +15,8 @@ Supports **LIMIT**, **MARKET**, **IOC** (Immediate or Cancel), and **FOK** (Fill
 ![Prisma](https://img.shields.io/badge/Prisma-7-2D3748?style=for-the-badge&logo=prisma&logoColor=white)
 ![Socket.IO](https://img.shields.io/badge/Socket.IO-4-010101?style=for-the-badge&logo=socket.io&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=for-the-badge&logo=redis&logoColor=white)
+![Prometheus](https://img.shields.io/badge/Prometheus-Metrics-E6522C?style=for-the-badge&logo=prometheus&logoColor=white)
+![Grafana](https://img.shields.io/badge/Grafana-Dashboard-F46800?style=for-the-badge&logo=grafana&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 ![Swagger](https://img.shields.io/badge/Swagger-OpenAPI-85EA2D?style=for-the-badge&logo=swagger&logoColor=black)
 ![Jest](https://img.shields.io/badge/Jest-Tests-C21325?style=for-the-badge&logo=jest&logoColor=white)
@@ -810,6 +812,7 @@ All configuration is via environment variables. Create a `.env` file in the proj
 | `API_KEY` | — | Accepted API key for authenticated endpoints |
 | `PORT` | `3000` | HTTP server port |
 | `NODE_ENV` | `development` | Set to `production` for JSON logging |
+| `LOG_SAMPLE_RATE` | `1.0` | Production log sampling rate (0.0 to 1.0) |
 | `USE_REDIS_ADAPTER` | `false` | Enable Redis Socket.IO adapter |
 | `REDIS_HOST` | `localhost` | Redis host for Socket.IO adapter |
 | `REDIS_PORT` | `6379` | Redis port for Socket.IO adapter |
@@ -829,6 +832,8 @@ All configuration is via environment variables. Create a `.env` file in the proj
 | **ORM** | Prisma 7 (`@prisma/adapter-pg`) | ![Prisma](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white) |
 | **WebSockets** | Socket.IO via `@nestjs/websockets` | ![Socket.IO](https://img.shields.io/badge/Socket.IO-4-010101?style=flat-square&logo=socket.io&logoColor=white) |
 | **WS Scaling** | Redis adapter (`@socket.io/redis-adapter`) | ![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat-square&logo=redis&logoColor=white) |
+| **Metrics** | Prometheus via `prom-client` | ![Prometheus](https://img.shields.io/badge/Prometheus-Metrics-E6522C?style=flat-square&logo=prometheus&logoColor=white) |
+| **Dashboard** | Grafana | ![Grafana](https://img.shields.io/badge/Grafana-Dashboard-F46800?style=flat-square&logo=grafana&logoColor=white) |
 | **Validation** | class-validator, class-transformer | ![npm](https://img.shields.io/badge/class--validator-✓-CB3837?style=flat-square&logo=npm&logoColor=white) |
 | **API Docs** | Swagger / OpenAPI (`@nestjs/swagger`) | ![Swagger](https://img.shields.io/badge/Swagger-OpenAPI-85EA2D?style=flat-square&logo=swagger&logoColor=black) |
 | **Rate Limiting** | `@nestjs/throttler` | ![Shield](https://img.shields.io/badge/Throttler-100_req/min-orange?style=flat-square&logo=nestjs&logoColor=white) |
