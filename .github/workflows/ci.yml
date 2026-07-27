@@ -52,3 +52,15 @@ jobs:
 
       - name: Run E2E Tests
         run: npm run test:e2e
+
+      - name: Run Performance Benchmark & SLA Gate Verification
+        run: |
+          npm run benchmark
+          npm run test:benchmark-gate
+
+      - name: Upload Benchmark Results Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results
+          path: benchmark-results.json

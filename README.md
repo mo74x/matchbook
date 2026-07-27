@@ -776,6 +776,9 @@ npm run test:cov
 
 # Run E2E integration tests
 npm run test:e2e
+
+# Run performance SLA verification gate
+npm run test:benchmark-gate
 ```
 
 The test suite covers:
@@ -786,8 +789,9 @@ The test suite covers:
 - **prisma.service.spec.ts** — Database connection lifecycle.
 - **app.controller.spec.ts** — Application controller smoke tests.
 - **app.e2e-spec.ts** — Full HTTP E2E tests for health, metrics, order book, and depth endpoints.
+- **verify-benchmark-sla.ts** — Performance SLA verification gate checking latency and throughput thresholds.
 
-### CI/CD Pipeline
+### CI/CD Pipeline & Performance Gate
 
 The project includes a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on every push and pull request to `main`:
 
@@ -797,6 +801,8 @@ The project includes a GitHub Actions workflow (`.github/workflows/ci.yml`) that
 4. **`npm run build`** — TypeScript compilation
 5. **`npm test`** — Unit tests
 6. **`npm run test:e2e`** — E2E integration tests
+7. **`npm run benchmark` & `npm run test:benchmark-gate`** — Runs in-memory performance profiling and fails the build if latency or throughput regresses below SLA limits
+8. **Artifact Upload** — Saves `benchmark-results.json` as a CI workflow build artifact
 
 A PostgreSQL 15 service container is provisioned automatically for the CI environment.
 
