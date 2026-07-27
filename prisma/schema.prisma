@@ -25,3 +25,14 @@ model OrderEvent {
   createdAt   DateTime  @default(now()) @db.Timestamptz
   @@index([instrument, sequenceId(sort: Asc)])
 }
+
+// Order Book Snapshots for Fast Crash Recovery
+model OrderBookSnapshot {
+  id           String   @id @default(uuid())
+  instrument   String   @db.VarChar(20)
+  lastSequence BigInt
+  snapshotData Json     @db.JsonB
+  createdAt    DateTime @default(now()) @db.Timestamptz
+
+  @@index([instrument, lastSequence(sort: Desc)])
+}

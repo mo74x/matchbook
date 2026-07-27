@@ -14,6 +14,7 @@ describe('MarketRegistryService', () => {
   let mockMarketGateway: {
     broadcastTrades: jest.Mock;
     broadcastBookUpdate: jest.Mock;
+    broadcastDepthUpdate: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -29,6 +30,7 @@ describe('MarketRegistryService', () => {
     mockMarketGateway = {
       broadcastTrades: jest.fn(),
       broadcastBookUpdate: jest.fn(),
+      broadcastDepthUpdate: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({

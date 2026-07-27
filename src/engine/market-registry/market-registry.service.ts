@@ -55,6 +55,10 @@ export class MarketRegistryService implements OnModuleInit {
     const bestBid = processor.book.getBestBid()?.price || null;
     const bestAsk = processor.book.getBestAsk()?.price || null;
     this.marketGateway.broadcastBookUpdate(order.instrument, bestBid, bestAsk);
+    this.marketGateway.broadcastDepthUpdate(
+      order.instrument,
+      processor.book.getDepth(20),
+    );
 
     return result;
   }
@@ -85,6 +89,10 @@ export class MarketRegistryService implements OnModuleInit {
       const bestBid = processor.book.getBestBid()?.price || null;
       const bestAsk = processor.book.getBestAsk()?.price || null;
       this.marketGateway.broadcastBookUpdate(instrument, bestBid, bestAsk);
+      this.marketGateway.broadcastDepthUpdate(
+        instrument,
+        processor.book.getDepth(20),
+      );
     }
 
     return result;

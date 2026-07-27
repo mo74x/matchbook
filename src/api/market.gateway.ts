@@ -50,4 +50,22 @@ export class MarketGateway implements OnGatewayConnection, OnGatewayDisconnect {
       bestAsk,
     });
   }
+
+  /**
+   * Broadcasts aggregated L2 order book depth updates over WebSockets.
+   */
+  broadcastDepthUpdate(
+    instrument: string,
+    depth: {
+      bids: Array<{ price: number; quantity: number }>;
+      asks: Array<{ price: number; quantity: number }>;
+    },
+  ) {
+    if (!this.server) return;
+
+    this.server.to('market-data').emit('depth_updated', {
+      instrument,
+      ...depth,
+    });
+  }
 }

@@ -29,7 +29,10 @@ const dbEvent = (
 
 describe('EventStoreService', () => {
   let service: EventStoreService;
-  let prisma: { orderEvent: { createMany: jest.Mock; findMany: jest.Mock } };
+  let prisma: {
+    orderEvent: { createMany: jest.Mock; findMany: jest.Mock };
+    orderBookSnapshot: { findFirst: jest.Mock; create: jest.Mock };
+  };
 
   beforeEach(async () => {
     seqCounter = 1n;
@@ -38,6 +41,10 @@ describe('EventStoreService', () => {
       orderEvent: {
         createMany: jest.fn().mockResolvedValue({ count: 0 }),
         findMany: jest.fn().mockResolvedValue([]),
+      },
+      orderBookSnapshot: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({}),
       },
     };
 
@@ -234,7 +241,7 @@ describe('EventStoreService', () => {
       await service.recoverOrderBook(INSTRUMENT);
 
       expect(prisma.orderEvent.findMany).toHaveBeenCalledWith({
-        where: { instrument: INSTRUMENT },
+        where: { instrument: INSTRUMENT, sequenceId: { gt: 0n } },
         orderBy: { sequenceId: 'asc' },
       });
     });

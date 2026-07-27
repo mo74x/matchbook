@@ -129,4 +129,62 @@ describe('MatchingEngine', () => {
       { price: 51500, quantity: 6 },
     ]);
   });
+
+  it('should process MARKET order matching across multiple price levels without resting', () => {
+    book.add(createOrder('a1', 'ASK', 51000, 5));
+    book.add(createOrder('a2', 'ASK', 52000, 10));
+
+    const marketBid: Order = {
+      ...createOrder('m1', 'BID', 0, 8),
+      type: 'MARKET',
+    };
+
+    const result = MatchingEngine.processOrder(marketBid, book);
+
+    expect(result.trades.length).toBe(2);
+    expect(result.trades[0].price).toBe(51000);
+    expect(result.trades[0].quantity).toBe(5);
+    expect(result.trades[1].price).toBe(52000);
+    expect(result.trades[1].quantity).toBe(3);
+
+    // Should NOT rest in the book
+    expect(book.getBestBid()).toBeUndefined();
+  });
+
+  it('should process IOC order and cancel remaining unexecuted quantity', () => {
+    book.add(createOrder('a1', 'ASK', 51000, 4));
+
+    const iocBid: Order = {
+      ...createOrder('ioc1', 'BID', 51000, 10),
+      type: 'IOC',
+    };
+
+    const result = MatchingEngine.processOrder(iocBid, book);
+
+    expect(result.trades.length).toBe(1);
+    expect(result.trades[0].quantity).toBe(4);
+    expect(
+      result.events.some((e) => e.eventType === EventType.ORDER_CANCELLED),
+    ).toBe(true);
+
+    // Remaining 6 should not rest in book
+    expect(book.getBestBid()).toBeUndefined();
+  });
+
+  it('should process FOK order and kill if total depth is insufficient', () => {
+    book.add(createOrder('a1', 'ASK', 51000, 4));
+
+    const fokBid: Order = {
+      ...createOrder('fok1', 'BID', 51000, 10),
+      type: 'FOK',
+    };
+
+    const result = MatchingEngine.processOrder(fokBid, book);
+
+    // Should NOT execute any trades
+    expect(result.trades.length).toBe(0);
+    expect(result.events.length).toBe(1);
+    expect(result.events[0].eventType).toBe(EventType.ORDER_CANCELLED);
+    expect(book.getBestAsk()?.orders[0].remainingQuantity).toBe(4);
+  });
 });

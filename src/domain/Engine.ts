@@ -22,22 +22,50 @@ export class MatchingEngine {
       events: [],
     };
 
+    const orderType = incomingOrder.type || 'LIMIT';
     let remainingQty = incomingOrder.initialQuantity;
 
-    //Attempt to match aggressively against resting orders
+    // FOK (Fill or Kill) Pre-check: Must fill 100% or cancel immediately without execution
+    if (orderType === 'FOK') {
+      const fillable = this.calculateFillableQuantity(incomingOrder, book);
+      if (fillable < incomingOrder.initialQuantity) {
+        result.events.push({
+          eventType: EventType.ORDER_CANCELLED,
+          orderId: incomingOrder.id,
+          payload: {
+            side: incomingOrder.side,
+            price: incomingOrder.price,
+            remainingQuantity: incomingOrder.initialQuantity,
+          },
+        });
+        return result;
+      }
+    }
+
+    // Attempt to match aggressively against resting orders
     while (remainingQty > 0) {
       // Find the best counterparty price
       const bestLevel =
         incomingOrder.side === 'BID' ? book.getBestAsk() : book.getBestBid();
 
-      // If there's no counterparty, or the prices don't cross, stop matching
+      // If there's no counterparty, stop matching
       if (!bestLevel) break;
-      if (incomingOrder.side === 'BID' && incomingOrder.price < bestLevel.price)
-        break;
-      if (incomingOrder.side === 'ASK' && incomingOrder.price > bestLevel.price)
-        break;
 
-      //We have a price match! Iterate through the FIFO queue at this price level
+      // Price limit check for non-market orders
+      if (orderType !== 'MARKET') {
+        if (
+          incomingOrder.side === 'BID' &&
+          incomingOrder.price < bestLevel.price
+        )
+          break;
+        if (
+          incomingOrder.side === 'ASK' &&
+          incomingOrder.price > bestLevel.price
+        )
+          break;
+      }
+
+      // We have a price match! Iterate through the FIFO queue at this price level
       while (remainingQty > 0 && bestLevel.orders.length > 0) {
         const restingOrder = bestLevel.peek()!;
 
@@ -104,22 +132,58 @@ export class MatchingEngine {
       }
     }
 
-    //If the incoming order still has quantity remaining, add it to the book
+    // Handle remaining quantity according to order type
     if (remainingQty > 0) {
       incomingOrder.remainingQuantity = remainingQty;
-      book.add(incomingOrder);
+      if (orderType === 'LIMIT') {
+        // Rest in book
+        book.add(incomingOrder);
 
-      result.events.push({
-        eventType: EventType.ORDER_PLACED,
-        orderId: incomingOrder.id,
-        payload: {
-          side: incomingOrder.side,
-          price: incomingOrder.price,
-          quantity: remainingQty,
-        },
-      });
+        result.events.push({
+          eventType: EventType.ORDER_PLACED,
+          orderId: incomingOrder.id,
+          payload: {
+            side: incomingOrder.side,
+            price: incomingOrder.price,
+            quantity: remainingQty,
+          },
+        });
+      } else {
+        // MARKET, IOC, FOK: Cancel unfilled remainder
+        result.events.push({
+          eventType: EventType.ORDER_CANCELLED,
+          orderId: incomingOrder.id,
+          payload: {
+            side: incomingOrder.side,
+            price: incomingOrder.price,
+            remainingQuantity: remainingQty,
+          },
+        });
+      }
     }
 
     return result;
+  }
+
+  /**
+   * Pre-calculates total fillable quantity across order book levels for FOK verification.
+   */
+  private static calculateFillableQuantity(
+    order: Order,
+    book: OrderBook,
+  ): number {
+    let fillable = 0;
+    const depth = book.getDepth(100);
+    const levels = order.side === 'BID' ? depth.asks : depth.bids;
+
+    for (const level of levels) {
+      if (order.side === 'BID' && order.price < level.price) break;
+      if (order.side === 'ASK' && order.price > level.price) break;
+
+      fillable += level.quantity;
+      if (fillable >= order.initialQuantity) break;
+    }
+
+    return fillable;
   }
 }
