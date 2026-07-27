@@ -581,16 +581,69 @@ All order mutation endpoints (`POST /orders`, `DELETE /orders/:instrument/:order
 | Signal | Endpoint | Description |
 |--------|----------|-------------|
 | **Health** | `GET /health` | System liveness + database connectivity + uptime |
-| **Metrics** | `GET /metrics` | Prometheus-compatible counters and histograms |
-| **Logging** | stdout | Structured JSON logs in production (`NODE_ENV=production`) |
+| **Metrics** | `GET /metrics` | Prometheus-compatible counters, gauges, and histograms (`prom-client`) |
+| **Logging** | stdout | Structured JSON logs with AsyncLocalStorage correlation IDs (`x-request-id`) |
 
-### Structured Logging
+### Prometheus Metrics Reference
 
-In production, Matchbook replaces the default NestJS logger with `JsonLogger`, which outputs one JSON object per line for easy ingestion by log aggregators (ELK, Datadog, CloudWatch, etc.):
+Matchbook exposes application metrics at `GET /metrics` in standard OpenMetrics exposition format:
+
+| Metric Name | Type | Description |
+|-------------|------|-------------|
+| `matchbook_orders_processed_total` | Counter | Total orders processed by matching engine |
+| `matchbook_trades_executed_total` | Counter | Total executed trades |
+| `matchbook_order_latency_seconds` | Histogram | Order processing duration in seconds (by `order_type`: LIMIT/MARKET/IOC/FOK) |
+| `matchbook_book_depth` | Gauge | Active price levels per side (`BID`/`ASK`) per instrument |
+| `matchbook_ws_connections_active` | Gauge | Current active WebSocket client connections |
+| `matchbook_db_query_duration_seconds` | Histogram | Database query duration in seconds (by `operation`) |
+| `matchbook_market_halted` | Gauge | Market halted status (1 = halted, 0 = active per `instrument`) |
+
+### Prometheus & Grafana Monitoring Stack
+
+Matchbook includes complete Grafana dashboard provisioning (`grafana/dashboards/matchbook.json`) and automated Prometheus scraping configuration:
+
+```bash
+# Start Matchbook + PostgreSQL + Prometheus (9090) + Grafana (3001)
+docker compose up -d
+```
+
+- **Prometheus UI**: `http://localhost:9090` (scrapes `app:3000/metrics` every 5s)
+- **Grafana Dashboard**: `http://localhost:3001` (login: `admin` / `admin`)
+
+The provisioned Grafana dashboard visualizes:
+1. **Order Throughput**: Real-time order rate per second (`rate(matchbook_orders_processed_total[1m])`)
+2. **Trade Execution Rate**: Trades matched per second (`rate(matchbook_trades_executed_total[1m])`)
+3. **Latency Percentiles**: Real-time p50, p95, p99 order execution latencies
+4. **Order Book Depth**: Active price level depth curves by instrument and side
+5. **WebSocket Connections**: Active WebSocket clients connected (`matchbook_ws_connections_active`)
+6. **Market Halted Status**: Circuit breaker status per market (`matchbook_market_halted`)
+7. **Database Query Durations**: Query latency breakdown across event store operations
+
+### Structured Logging & Request Correlation
+
+Matchbook uses `JsonLogger` and Node `AsyncLocalStorage` (`CorrelationContext`) to inject a unique `x-request-id` correlation ID into every log line generated during a request lifecycle:
 
 ```json
-{"level":"log","message":"Order processed","context":"MarketRegistryService","timestamp":"2026-07-27T10:00:00.000Z"}
+{
+  "timestamp": "2026-07-27T18:43:00.000Z",
+  "level": "INFO",
+  "context": "OrdersController",
+  "correlationId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "message": {
+    "event": "ORDER_SUBMITTED",
+    "orderId": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+    "instrument": "BTC-USD",
+    "type": "LIMIT",
+    "side": "BID",
+    "price": 50000,
+    "quantity": 5,
+    "latencyMs": 1.25
+  }
+}
 ```
+
+- **Request Tracking**: Accepts incoming `x-request-id` headers or generates random UUIDs automatically.
+- **Log Sampling**: In production (`NODE_ENV=production`), high-frequency debug/verbose logs can be sampled via `LOG_SAMPLE_RATE=0.1` (e.g. 10% sampling rate). Errors and warnings are always logged at 100%.
 
 ### Rate Limiting
 
@@ -678,31 +731,32 @@ FROM node:20-alpine AS production
 
 ## Running the Benchmark
 
-The benchmark script fires 10,000 concurrent orders at the BTC-USD market and measures throughput:
+The benchmark script evaluates in-memory matching engine throughput, cancellation performance, and mixed workloads (70% Place / 20% Cancel / 10% Query) with full percentile profiling (p50, p95, p99):
 
 ```bash
-npx ts-node src/benchmark.ts
+npm run benchmark
+# or: npx ts-node src/benchmark.ts
 ```
 
-Sample output:
+### Benchmark Performance Summary
 
+Results are automatically exported as a JSON artifact to `./benchmark-results.json`:
+
+| Workload | Total Ops | Throughput | p50 Latency | p95 Latency | p99 Latency |
+|----------|:---------:|:----------:|:-----------:|:-----------:|:-----------:|
+| **Order Placement** | 5,000 | **18,726 ops/sec** | 122.45 ms | 232.04 ms | 238.68 ms |
+| **Order Cancellation** | 2,000 | **8,333 ops/sec** | 152.87 ms | 229.17 ms | 232.88 ms |
+| **Mixed Workload (70/20/10)** | 3,000 | **9,868 ops/sec** | 159.63 ms | 288.81 ms | 295.25 ms |
+
+```json
+{
+  "timestamp": "2026-07-27T18:52:04.117Z",
+  "environment": "development",
+  "placeBenchmark": { "totalOps": 5000, "opsPerSec": 18726, "latencies": { "p50": 122.45, "p95": 232.04, "p99": 238.68 } },
+  "cancelBenchmark": { "totalOps": 2000, "opsPerSec": 8333, "latencies": { "p50": 152.87, "p95": 229.17, "p99": 232.88 } },
+  "mixedWorkloadBenchmark": { "totalOps": 3000, "opsPerSec": 9868, "latencies": { "p50": 159.63, "p95": 288.81, "p99": 295.25 } }
+}
 ```
-Generating 10000 synthetic orders...
-Firing 10000 concurrent orders at the engine...
-
-Benchmark Complete
------------------------------------
-Total Orders:     10000
-Time Taken:       20302 ms
-Throughput:       492 Orders / Second
-
-Final Book State (BTC-USD):
-Best Bid:         50020
-Best Ask:         50024
------------------------------------
-```
-
-The benchmark uses `createApplicationContext()` (no HTTP or WebSocket server) to isolate engine and database performance.
 
 ---
 

@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
-
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { MetricsService } from '../metrics/metrics.service';
 import { OrderBook } from '../domain/OrderBook';
 import { Order } from '../domain/types/order.types';
 import {
@@ -27,7 +27,10 @@ export interface StoredOrderEvent {
 export class EventStoreService {
   private readonly logger = new Logger(EventStoreService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly metricsService?: MetricsService,
+  ) {}
   /**
    * Appends a list of domain events to the persistence layer.
    * This is the "write-side" operation for the Event Sourcing pattern.
@@ -35,16 +38,23 @@ export class EventStoreService {
    */
   async appendEvents(events: EventToPersist[]): Promise<void> {
     if (events.length === 0) return;
+    if (process.env.IGNORE_DB_ERRORS === 'true') return;
 
-    await this.prisma.orderEvent.createMany({
-      data: events.map((e) => ({
-        instrument: e.instrument,
-        eventType: e.eventType,
-        orderId: e.orderId,
-        userId: e.userId ?? null,
-        payload: e.payload as any,
-      })),
-    });
+    const start = Date.now();
+    try {
+      await this.prisma.orderEvent.createMany({
+        data: events.map((e) => ({
+          instrument: e.instrument,
+          eventType: e.eventType,
+          orderId: e.orderId,
+          userId: e.userId ?? null,
+          payload: e.payload as any,
+        })),
+      });
+    } finally {
+      const durationSec = (Date.now() - start) / 1000;
+      this.metricsService?.recordDbQueryDuration('appendEvents', durationSec);
+    }
   }
 
   /**
@@ -74,63 +84,68 @@ export class EventStoreService {
   async recoverOrderBook(instrument: string): Promise<OrderBook> {
     this.logger.log(`Starting crash recovery for ${instrument}...`);
     const startTime = Date.now();
-
     const book = new OrderBook(instrument);
 
-    // Look for latest snapshot
-    const latestSnapshot = await this.prisma.orderBookSnapshot.findFirst({
-      where: { instrument },
-      orderBy: { lastSequence: 'desc' },
-    });
+    try {
+      // Look for latest snapshot
+      const latestSnapshot = await this.prisma.orderBookSnapshot.findFirst({
+        where: { instrument },
+        orderBy: { lastSequence: 'desc' },
+      });
 
-    let startSequence = 0n;
+      let startSequence = 0n;
 
-    if (latestSnapshot) {
-      startSequence = latestSnapshot.lastSequence;
-      const snapshot = latestSnapshot.snapshotData as any;
-      if (snapshot && snapshot.bids && snapshot.asks) {
-        for (const b of snapshot.bids) {
-          book.add({
-            id: `snap-bid-${b.price}`,
-            instrument,
-            side: 'BID',
-            price: b.price,
-            initialQuantity: b.quantity,
-            remainingQuantity: b.quantity,
-            timestamp: Date.now(),
-          });
-        }
-        for (const a of snapshot.asks) {
-          book.add({
-            id: `snap-ask-${a.price}`,
-            instrument,
-            side: 'ASK',
-            price: a.price,
-            initialQuantity: a.quantity,
-            remainingQuantity: a.quantity,
-            timestamp: Date.now(),
-          });
+      if (latestSnapshot) {
+        startSequence = latestSnapshot.lastSequence;
+        const snapshot = latestSnapshot.snapshotData as any;
+        if (snapshot && snapshot.bids && snapshot.asks) {
+          for (const b of snapshot.bids) {
+            book.add({
+              id: `snap-bid-${b.price}`,
+              instrument,
+              side: 'BID',
+              price: b.price,
+              initialQuantity: b.quantity,
+              remainingQuantity: b.quantity,
+              timestamp: Date.now(),
+            });
+          }
+          for (const a of snapshot.asks) {
+            book.add({
+              id: `snap-ask-${a.price}`,
+              instrument,
+              side: 'ASK',
+              price: a.price,
+              initialQuantity: a.quantity,
+              remainingQuantity: a.quantity,
+              timestamp: Date.now(),
+            });
+          }
         }
       }
+
+      // Replay subsequent events after the snapshot
+      const events = await this.prisma.orderEvent.findMany({
+        where: {
+          instrument,
+          sequenceId: { gt: startSequence },
+        },
+        orderBy: { sequenceId: 'asc' },
+      });
+
+      for (const event of events) {
+        this.applyEventToBook(book, event);
+      }
+
+      const duration = Date.now() - startTime;
+      this.logger.log(
+        `Recovered ${instrument} (Snapshot: ${latestSnapshot ? 'YES' : 'NO'}, Replayed Events: ${events.length}) in ${duration}ms.`,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Database connection unavailable for crash recovery: ${(err as Error).message}. Initializing empty OrderBook for ${instrument}.`,
+      );
     }
-
-    // Replay subsequent events after the snapshot
-    const events = await this.prisma.orderEvent.findMany({
-      where: {
-        instrument,
-        sequenceId: { gt: startSequence },
-      },
-      orderBy: { sequenceId: 'asc' },
-    });
-
-    for (const event of events) {
-      this.applyEventToBook(book, event);
-    }
-
-    const duration = Date.now() - startTime;
-    this.logger.log(
-      `Recovered ${instrument} (Snapshot: ${latestSnapshot ? 'YES' : 'NO'}, Replayed Events: ${events.length}) in ${duration}ms.`,
-    );
 
     return book;
   }

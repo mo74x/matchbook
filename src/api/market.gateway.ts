@@ -6,9 +6,16 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger, Injectable, Inject, forwardRef } from '@nestjs/common';
+import {
+  Logger,
+  Injectable,
+  Inject,
+  forwardRef,
+  Optional,
+} from '@nestjs/common';
 import { Trade } from '../domain/types/order.types';
 import { AuthService } from '../auth/auth.service';
+import { MetricsService } from '../metrics/metrics.service';
 
 @WebSocketGateway({ cors: true })
 @Injectable()
@@ -21,10 +28,12 @@ export class MarketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     @Inject(forwardRef(() => AuthService))
     private readonly authService?: AuthService,
+    @Optional() private readonly metricsService?: MetricsService,
   ) {}
 
   async handleConnection(client: Socket) {
     this.logger.log(`Client connected: ${client.id}`);
+    this.metricsService?.incrementWsConnections();
     await client.join('market-data');
 
     // Attempt token validation for user-scoped socket room
@@ -49,6 +58,7 @@ export class MarketGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   handleDisconnect(client: Socket) {
     this.logger.log(`Client disconnected: ${client.id}`);
+    this.metricsService?.decrementWsConnections();
   }
 
   /**

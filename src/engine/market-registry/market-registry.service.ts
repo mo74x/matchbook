@@ -1,8 +1,9 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { EventStoreService } from '../../event-store/event-store.service';
 import { MarketProcessor } from '../market-processor';
 import { Order } from '../../domain/types/order.types';
 import { MarketGateway } from '../../api/market.gateway';
+import { MetricsService } from '../../metrics/metrics.service';
 
 @Injectable()
 export class MarketRegistryService implements OnModuleInit {
@@ -13,6 +14,7 @@ export class MarketRegistryService implements OnModuleInit {
   constructor(
     private readonly eventStore: EventStoreService,
     private readonly marketGateway: MarketGateway,
+    @Optional() private readonly metricsService?: MetricsService,
   ) {}
 
   /**
@@ -28,6 +30,7 @@ export class MarketRegistryService implements OnModuleInit {
         instrument,
         recoveredBook,
         this.eventStore,
+        this.metricsService,
       );
       this.processors.set(instrument, processor);
     }
@@ -47,11 +50,32 @@ export class MarketRegistryService implements OnModuleInit {
       );
     }
 
+    const orderType = order.type || 'LIMIT';
+    const start = Date.now();
+
     const result = await processor.enqueueOrder(order);
+    const durationSec = (Date.now() - start) / 1000;
+
+    this.metricsService?.recordOrderLatency(orderType, durationSec);
+    this.metricsService?.incrementOrdersProcessed(orderType);
 
     if (result.trades.length > 0) {
+      this.metricsService?.incrementTrades(result.trades.length);
       this.marketGateway.broadcastTrades(result.trades);
     }
+
+    const depth = processor.book.getDepth(100);
+    this.metricsService?.setBookDepth(
+      order.instrument,
+      'BID',
+      depth.bids.length,
+    );
+    this.metricsService?.setBookDepth(
+      order.instrument,
+      'ASK',
+      depth.asks.length,
+    );
+
     const bestBid = processor.book.getBestBid()?.price || null;
     const bestAsk = processor.book.getBestAsk()?.price || null;
     this.marketGateway.broadcastBookUpdate(order.instrument, bestBid, bestAsk);
@@ -90,6 +114,10 @@ export class MarketRegistryService implements OnModuleInit {
     const result = await processor.cancelOrder(orderId, userId);
 
     if (result.success) {
+      const depth = processor.book.getDepth(100);
+      this.metricsService?.setBookDepth(instrument, 'BID', depth.bids.length);
+      this.metricsService?.setBookDepth(instrument, 'ASK', depth.asks.length);
+
       const bestBid = processor.book.getBestBid()?.price || null;
       const bestAsk = processor.book.getBestAsk()?.price || null;
       this.marketGateway.broadcastBookUpdate(instrument, bestBid, bestAsk);

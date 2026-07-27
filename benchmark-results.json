@@ -1,0 +1,43 @@
+{
+  "timestamp": "2026-07-27T18:52:04.117Z",
+  "environment": "development",
+  "placeBenchmark": {
+    "totalOps": 5000,
+    "durationMs": 267,
+    "opsPerSec": 18726,
+    "latencies": {
+      "p50": 122.454,
+      "p95": 232.04,
+      "p99": 238.68,
+      "min": 27.482,
+      "max": 240.255,
+      "avg": 125.589
+    }
+  },
+  "cancelBenchmark": {
+    "totalOps": 2000,
+    "durationMs": 240,
+    "opsPerSec": 8333,
+    "latencies": {
+      "p50": 152.871,
+      "p95": 229.171,
+      "p99": 232.878,
+      "min": 6.165,
+      "max": 233.566,
+      "avg": 142.059
+    }
+  },
+  "mixedWorkloadBenchmark": {
+    "totalOps": 3000,
+    "durationMs": 304,
+    "opsPerSec": 9868,
+    "latencies": {
+      "p50": 159.63,
+      "p95": 288.806,
+      "p99": 295.252,
+      "min": 0,
+      "max": 296.492,
+      "avg": 150.437
+    }
+  }
+}

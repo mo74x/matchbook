@@ -10,6 +10,7 @@ import {
   BadRequestException,
   NotFoundException,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -33,6 +34,8 @@ import * as currentUserDecorator from '../auth/decorators/current-user.decorator
 @ApiTags('orders')
 @Controller('orders')
 export class OrdersController {
+  private readonly logger = new Logger(OrdersController.name);
+
   constructor(
     private readonly registry: MarketRegistryService,
     private readonly eventStore: EventStoreService,
@@ -64,7 +67,20 @@ export class OrdersController {
         userId: user?.userId,
       };
 
+      const start = Date.now();
       const result = await this.registry.submitOrder(order);
+      const latencyMs = Date.now() - start;
+
+      this.logger.log({
+        event: 'ORDER_SUBMITTED',
+        orderId: order.id,
+        instrument: order.instrument,
+        type: order.type,
+        side: order.side,
+        price: order.price,
+        quantity: order.initialQuantity,
+        latencyMs,
+      });
 
       return {
         message: 'Order processed successfully',

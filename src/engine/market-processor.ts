@@ -5,6 +5,7 @@ import { MatchingEngine, MatchingResult } from '../domain/Engine';
 import { EventStoreService } from '../event-store/event-store.service';
 import { EventToPersist } from '../domain/types/event.types';
 import { EventType } from '../../generated/prisma/enums';
+import { MetricsService } from '../metrics/metrics.service';
 
 export interface CancelResult {
   success: boolean;
@@ -36,9 +37,11 @@ export class MarketProcessor {
     public readonly instrument: string,
     initialBook: OrderBook,
     private readonly eventStore: EventStoreService,
+    private readonly metricsService?: MetricsService,
   ) {
     this.book = initialBook;
     this.logger = new Logger(`${MarketProcessor.name}:${this.instrument}`);
+    this.metricsService?.setMarketHalted(this.instrument, false);
   }
 
   /**
@@ -167,6 +170,9 @@ export class MarketProcessor {
           });
         }
       } catch (error) {
+        this.logger.warn(
+          `MARKET HALTED: Market ${this.instrument} halted due to persistence failure for task ${task.id}.`,
+        );
         this.logger.error(
           `CRITICAL: Persistence failed for task ${task.id} in market ${this.instrument}. Halting market.`,
           error,
@@ -174,6 +180,7 @@ export class MarketProcessor {
 
         // Circuit breaker: halt market to prevent further divergence
         this.isHalted = true;
+        this.metricsService?.setMarketHalted(this.instrument, true);
         callbacks?.reject(error);
 
         // Reject all remaining enqueued tasks

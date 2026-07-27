@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 jest.mock('../generated/prisma/client.js', () => ({
   PrismaClient: class MockPrismaClient {
@@ -110,8 +111,8 @@ describe('AppController (e2e)', () => {
     return request(app.getHttpServer()).get('/orders/mine').expect(401);
   });
 
-  it('/orders/my-trades (GET) without Auth header -> 401 Unauthorized', () => {
-    return request(app.getHttpServer()).get('/orders/my-trades').expect(401);
+  it('/orders/mine/trades (GET) without Auth header -> 401 Unauthorized', () => {
+    return request(app.getHttpServer()).get('/orders/mine/trades').expect(401);
   });
 
   it('/orders (POST) with invalid payload -> 400 Bad Request', () => {
@@ -140,7 +141,7 @@ describe('AppController (e2e)', () => {
       });
   });
 
-  it('Full order lifecycle: submit BID -> crossing ASK -> trade generated -> GET /orders/trades', async () => {
+  it('Full order lifecycle: submit BID -> crossing ASK -> trade generated -> GET /trades', async () => {
     // 1. Submit resting BID
     const bidRes = await request(app.getHttpServer())
       .post('/orders')
@@ -159,12 +160,12 @@ describe('AppController (e2e)', () => {
     expect(askRes.body.trades).toHaveLength(1);
     expect(askRes.body.trades[0].quantity).toBe(5);
 
-    // 3. GET /orders/trades
+    // 3. GET /trades
     const tradesRes = await request(app.getHttpServer())
-      .get('/orders/trades?instrument=BTC-USD')
+      .get('/trades?instrument=BTC-USD')
       .expect(200);
 
-    expect(Array.isArray(tradesRes.body)).toBe(true);
+    expect(Array.isArray(tradesRes.body.trades)).toBe(true);
   });
 
   it('Cancel flow: submit order -> DELETE /orders/:instrument/:orderId -> cancelled', async () => {
