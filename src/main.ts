@@ -3,11 +3,21 @@ import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { JsonLogger } from './common/json-logger.service';
 import { RedisIoAdapter } from './adapters/redis-io.adapter';
+import helmet from 'helmet';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger:
       process.env.NODE_ENV === 'production' ? new JsonLogger() : undefined,
+  });
+
+  // Security HTTP Headers
+  app.use(helmet());
+
+  // Enable CORS
+  app.enableCors({
+    origin: process.env.CORS_ORIGIN || '*',
+    credentials: true,
   });
 
   if (process.env.USE_REDIS === 'true' || process.env.REDIS_URL) {
@@ -20,7 +30,9 @@ async function bootstrap() {
     .setTitle('Matchbook API')
     .setDescription('Real-time Event-Sourced Order Matching Engine API')
     .setVersion('1.0')
+    .addBearerAuth()
     .addApiKey({ type: 'apiKey', name: 'x-api-key', in: 'header' }, 'x-api-key')
+    .addTag('auth')
     .addTag('orders')
     .addTag('trades')
     .addTag('health')

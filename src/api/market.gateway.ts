@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -5,19 +6,45 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger } from '@nestjs/common';
+import { Logger, Injectable, Inject, forwardRef } from '@nestjs/common';
 import { Trade } from '../domain/types/order.types';
+import { AuthService } from '../auth/auth.service';
 
 @WebSocketGateway({ cors: true })
+@Injectable()
 export class MarketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
   private readonly logger = new Logger(MarketGateway.name);
 
+  constructor(
+    @Inject(forwardRef(() => AuthService))
+    private readonly authService?: AuthService,
+  ) {}
+
   async handleConnection(client: Socket) {
     this.logger.log(`Client connected: ${client.id}`);
     await client.join('market-data');
+
+    // Attempt token validation for user-scoped socket room
+    const token =
+      (client.handshake.auth?.token as string) ||
+      (client.handshake.headers?.authorization?.replace(
+        'Bearer ',
+        '',
+      ) as string);
+
+    if (token && this.authService) {
+      const payload = await this.authService.validateToken(token);
+      if (payload) {
+        client.data.user = payload;
+        await client.join(`user:${payload.sub}`);
+        this.logger.log(
+          `Authenticated socket ${client.id} for user ${payload.sub}`,
+        );
+      }
+    }
   }
 
   handleDisconnect(client: Socket) {
@@ -67,5 +94,13 @@ export class MarketGateway implements OnGatewayConnection, OnGatewayDisconnect {
       instrument,
       ...depth,
     });
+  }
+
+  /**
+   * Sends user-specific order execution notifications to the user's socket room.
+   */
+  notifyUserOrderFilled(userId: string, data: Record<string, unknown>) {
+    if (!this.server) return;
+    this.server.to(`user:${userId}`).emit('order_filled', data);
   }
 }

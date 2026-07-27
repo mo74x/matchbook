@@ -4,6 +4,18 @@ jest.mock('../generated/prisma/client.js', () => ({
     $connect = jest.fn().mockResolvedValue(undefined);
     $disconnect = jest.fn().mockResolvedValue(undefined);
     $queryRaw = jest.fn().mockResolvedValue([{ 1: 1 }]);
+    user = {
+      findUnique: jest.fn().mockResolvedValue(null),
+      create: jest
+        .fn()
+        .mockImplementation((args: { data: { email: string } }) =>
+          Promise.resolve({
+            id: 'user-1',
+            email: args.data.email,
+            createdAt: new Date(),
+          }),
+        ),
+    };
     orderEvent = {
       createMany: jest.fn().mockResolvedValue({ count: 1 }),
       findMany: jest.fn().mockResolvedValue([]),
@@ -78,6 +90,21 @@ describe('AppController (e2e)', () => {
         expect(res.body.instrument).toBe('BTC-USD');
         expect(Array.isArray(res.body.bids)).toBe(true);
         expect(Array.isArray(res.body.asks)).toBe(true);
+      });
+  });
+
+  it('/orders/mine (GET) without Auth header -> 401 Unauthorized', () => {
+    return request(app.getHttpServer()).get('/orders/mine').expect(401);
+  });
+
+  it('/auth/register (POST)', () => {
+    return request(app.getHttpServer())
+      .post('/auth/register')
+      .send({ email: 'newtrader@example.com', password: 'Password123!' })
+      .expect(201)
+      .expect((res) => {
+        expect(res.body.accessToken).toBeDefined();
+        expect(res.body.user.email).toBe('newtrader@example.com');
       });
   });
 });

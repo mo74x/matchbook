@@ -89,6 +89,7 @@ describe('EventStoreService', () => {
         instrument: INSTRUMENT,
         eventType: EventType.ORDER_PLACED,
         orderId: 'order-1',
+        userId: null,
         payload: { side: 'BID', price: 50000, quantity: 10 },
       });
     });

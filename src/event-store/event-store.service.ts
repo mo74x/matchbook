@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
@@ -41,6 +42,7 @@ export class EventStoreService {
         instrument: e.instrument,
         eventType: e.eventType,
         orderId: e.orderId,
+        userId: e.userId ?? null,
         payload: e.payload as any,
       })),
     });
@@ -288,5 +290,52 @@ export class EventStoreService {
         createdAt: e.createdAt,
       })),
     };
+  }
+
+  /**
+   * Fetches all orders belonging to a specific user.
+   */
+  async getUserOrders(userId: string) {
+    const userEvents = await this.prisma.orderEvent.findMany({
+      where: { userId },
+      select: { orderId: true },
+      distinct: ['orderId'],
+      orderBy: { sequenceId: 'desc' },
+    });
+
+    const orders: any[] = [];
+    for (const e of userEvents) {
+      const status = await this.getOrderStatus(e.orderId);
+      if (status) {
+        orders.push(status);
+      }
+    }
+    return orders;
+  }
+
+  /**
+   * Fetches all trade executions belonging to a specific user.
+   */
+  async getUserTrades(userId: string) {
+    const userEvents = await this.prisma.orderEvent.findMany({
+      where: {
+        userId,
+        eventType: EventType.ORDER_MATCHED,
+      },
+      orderBy: { sequenceId: 'desc' },
+    });
+
+    return userEvents.map((e) => {
+      const payload = e.payload as unknown as OrderMatchedPayload;
+      return {
+        tradeId: payload.tradeId,
+        instrument: e.instrument,
+        orderId: e.orderId,
+        counterpartyOrderId: payload.counterpartyOrderId,
+        price: payload.matchedPrice ?? payload.price,
+        quantity: payload.matchedQuantity,
+        executedAt: e.createdAt,
+      };
+    });
   }
 }

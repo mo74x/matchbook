@@ -13,6 +13,7 @@ import { MetricsController } from './metrics/metrics.controller';
 import { MetricsService } from './metrics/metrics.service';
 import { MarketGateway } from './api/market.gateway';
 import { ApiKeyGuard } from './api/guards/api-key.guard';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ApiKeyGuard } from './api/guards/api-key.guard';
         limit: 100,
       },
     ]),
+    AuthModule,
   ],
   controllers: [
     AppController,

@@ -15,15 +15,30 @@ enum EventType {
   ORDER_PARTIALLY_FILLED
 }
 
+// User accounts for authentication and order ownership
+model User {
+  id           String       @id @default(uuid()) @db.Uuid
+  email        String       @unique @db.VarChar(255)
+  passwordHash String       @db.VarChar(255)
+  createdAt    DateTime     @default(now()) @db.Timestamptz
+  orderEvents  OrderEvent[]
+}
+
 // The Event Store
 model OrderEvent {
   sequenceId  BigInt    @id @default(autoincrement()) 
   instrument  String    @db.VarChar(20)
   eventType   EventType
   orderId     String    @db.Uuid
+  userId      String?   @db.Uuid
   payload     Json      @db.JsonB
   createdAt   DateTime  @default(now()) @db.Timestamptz
+
+  user        User?     @relation(fields: [userId], references: [id])
+
   @@index([instrument, sequenceId(sort: Asc)])
+  @@index([userId])
+  @@index([orderId])
 }
 
 // Order Book Snapshots for Fast Crash Recovery

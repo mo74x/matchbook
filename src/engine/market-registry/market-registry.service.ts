@@ -76,14 +76,18 @@ export class MarketRegistryService implements OnModuleInit {
   /**
    * Routes a cancellation request to the correct instrument processor.
    */
-  public async cancelOrder(instrument: string, orderId: string) {
+  public async cancelOrder(
+    instrument: string,
+    orderId: string,
+    userId?: string,
+  ) {
     const processor = this.processors.get(instrument);
 
     if (!processor) {
       throw new Error(`Market ${instrument} is not supported or not loaded.`);
     }
 
-    const result = await processor.cancelOrder(orderId);
+    const result = await processor.cancelOrder(orderId, userId);
 
     if (result.success) {
       const bestBid = processor.book.getBestBid()?.price || null;

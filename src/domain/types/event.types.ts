@@ -54,6 +54,7 @@ export interface PendingDomainEvent {
 
 export interface EventToPersist extends PendingDomainEvent {
   instrument: string;
+  userId?: string;
 }
 
 // The final shape of an event after it is fetched from the DB

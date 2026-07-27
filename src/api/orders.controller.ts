@@ -6,8 +6,10 @@ import {
   Param,
   Query,
   Body,
+  UseGuards,
   BadRequestException,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -15,12 +17,18 @@ import {
   ApiResponse,
   ApiParam,
   ApiQuery,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { MarketRegistryService } from '../engine/market-registry/market-registry.service';
 import { EventStoreService } from '../event-store/event-store.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { randomUUID } from 'crypto';
 import { Order } from '../domain/types/order.types';
+import {
+  OptionalJwtAuthGuard,
+  JwtAuthGuard,
+} from '../auth/guards/jwt-auth.guard';
+import * as currentUserDecorator from '../auth/decorators/current-user.decorator';
 
 @ApiTags('orders')
 @Controller('orders')
@@ -31,15 +39,19 @@ export class OrdersController {
   ) {}
 
   @Post()
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Submit a new order to the matching engine' })
   @ApiResponse({
     status: 201,
     description: 'Order submitted and matched successfully.',
   })
   @ApiResponse({ status: 400, description: 'Invalid order parameters.' })
-  async placeOrder(@Body() dto: CreateOrderDto) {
+  async placeOrder(
+    @Body() dto: CreateOrderDto,
+    @currentUserDecorator.CurrentUser() user?: currentUserDecorator.UserPayload,
+  ) {
     try {
-      // Map the incoming HTTP request to our internal Domain Order object
       const order: Order = {
         id: randomUUID(),
         instrument: dto.instrument,
@@ -49,9 +61,9 @@ export class OrdersController {
         initialQuantity: dto.quantity,
         remainingQuantity: dto.quantity,
         timestamp: Date.now(),
+        userId: user?.userId,
       };
 
-      // Send it to the engine
       const result = await this.registry.submitOrder(order);
 
       return {
@@ -65,6 +77,8 @@ export class OrdersController {
   }
 
   @Delete(':instrument/:orderId')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Cancel a resting order' })
   @ApiParam({ name: 'instrument', example: 'BTC-USD' })
   @ApiParam({
@@ -76,19 +90,69 @@ export class OrdersController {
   async cancelOrder(
     @Param('instrument') instrument: string,
     @Param('orderId') orderId: string,
+    @currentUserDecorator.CurrentUser() user?: currentUserDecorator.UserPayload,
   ) {
     try {
-      const result = await this.registry.cancelOrder(instrument, orderId);
+      const result = await this.registry.cancelOrder(
+        instrument,
+        orderId,
+        user?.userId,
+      );
       if (!result.success) {
+        if (result.message?.includes('Unauthorized')) {
+          throw new UnauthorizedException(result.message);
+        }
         throw new NotFoundException(
           result.message || 'Order not found resting in order book',
         );
       }
       return result;
     } catch (error) {
-      if (error instanceof NotFoundException) throw error;
+      if (
+        error instanceof NotFoundException ||
+        error instanceof UnauthorizedException
+      )
+        throw error;
       throw new BadRequestException((error as Error).message);
     }
+  }
+
+  @Get('mine')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get orders belonging to the authenticated user' })
+  @ApiResponse({
+    status: 200,
+    description: 'User orders retrieved successfully.',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  async getMyOrders(
+    @currentUserDecorator.CurrentUser() user: currentUserDecorator.UserPayload,
+  ) {
+    const orders = await this.eventStore.getUserOrders(user.userId);
+    return {
+      orders,
+      count: orders.length,
+    };
+  }
+
+  @Get('mine/trades')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get trades executed by the authenticated user' })
+  @ApiResponse({
+    status: 200,
+    description: 'User trades retrieved successfully.',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  async getMyTrades(
+    @currentUserDecorator.CurrentUser() user: currentUserDecorator.UserPayload,
+  ) {
+    const trades = await this.eventStore.getUserTrades(user.userId);
+    return {
+      trades,
+      count: trades.length,
+    };
   }
 
   @Get('book/:instrument')

@@ -19,7 +19,7 @@ interface TaskCallbacks {
 
 type ProcessorTask =
   | { type: 'PLACE'; id: string; order: Order }
-  | { type: 'CANCEL'; id: string; orderId: string };
+  | { type: 'CANCEL'; id: string; orderId: string; userId?: string };
 
 export class MarketProcessor {
   // The actual state of the market
@@ -62,10 +62,9 @@ export class MarketProcessor {
   }
 
   /**
-   * Pushes a cancellation task into the queue and triggers processing.
-   * Returns a Promise resolving to CancelResult.
+   * Pushes a cancellation task into the queue.
    */
-  public cancelOrder(orderId: string): Promise<CancelResult> {
+  public cancelOrder(orderId: string, userId?: string): Promise<CancelResult> {
     if (this.isHalted) {
       return Promise.reject(
         new Error(
@@ -77,7 +76,7 @@ export class MarketProcessor {
     const taskId = `cancel-${orderId}-${Date.now()}`;
     return new Promise((resolve, reject) => {
       this.pendingCallbacks.set(taskId, { resolve, reject });
-      this.taskQueue.push({ type: 'CANCEL', id: taskId, orderId });
+      this.taskQueue.push({ type: 'CANCEL', id: taskId, orderId, userId });
       void this.processQueue();
     });
   }
@@ -108,6 +107,7 @@ export class MarketProcessor {
             instrument: this.instrument,
             eventType: event.eventType,
             orderId: event.orderId,
+            userId: task.order.userId,
             payload: event.payload,
           }));
 
@@ -127,6 +127,19 @@ export class MarketProcessor {
             continue;
           }
 
+          if (
+            task.userId &&
+            restingOrder.userId &&
+            task.userId !== restingOrder.userId
+          ) {
+            callbacks?.resolve({
+              success: false,
+              orderId: task.orderId,
+              message: 'Unauthorized: Order belongs to another user',
+            });
+            continue;
+          }
+
           const { price, side, remainingQuantity } = restingOrder;
 
           // Remove resting order from in-memory book
@@ -137,6 +150,7 @@ export class MarketProcessor {
             instrument: this.instrument,
             eventType: EventType.ORDER_CANCELLED,
             orderId: task.orderId,
+            userId: task.userId || restingOrder.userId,
             payload: {
               price,
               side,

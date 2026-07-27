@@ -10,6 +10,7 @@ export interface Order {
   initialQuantity: number;
   remainingQuantity: number;
   timestamp: number;
+  userId?: string;
 }
 
 export interface Trade {
