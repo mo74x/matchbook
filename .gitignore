@@ -2,9 +2,13 @@
 /dist
 /node_modules
 /build
+
+# Agent / AI tool configs
 .agents
 .claude
 .windsurf
+.gemini
+
 # Logs
 logs
 *.log
@@ -16,6 +20,9 @@ lerna-debug.log*
 
 # OS
 .DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
 
 # Tests
 /coverage
@@ -29,6 +36,7 @@ lerna-debug.log*
 *.launch
 .settings/
 *.sublime-workspace
+*.sublime-project
 
 # IDE - VSCode
 .vscode/*
@@ -39,10 +47,8 @@ lerna-debug.log*
 
 # dotenv environment variable files
 .env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
+.env.*
+!.env.example
 
 # temp directory
 .temp
@@ -57,4 +63,8 @@ pids
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
+# Prisma generated client (re-generated on npm install / prisma generate)
 /generated/prisma
+
+# Docker
+docker-compose.override.yml
