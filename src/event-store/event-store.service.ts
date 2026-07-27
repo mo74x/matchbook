@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
+
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, Logger } from '@nestjs/common';
@@ -184,6 +183,13 @@ export class EventStoreService {
 
       case EventType.ORDER_CANCELLED: {
         book.removeOrder(event.orderId);
+        break;
+      }
+
+      default: {
+        this.logger.warn(
+          `Unknown or corrupted event type "${(event as any).eventType}" for order ${event.orderId}. Skipping.`,
+        );
         break;
       }
     }

@@ -1,8 +1,8 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { EventType } from '../../generated/prisma/enums';
 import { OrderBook } from './OrderBook';
 import { MatchingEngine } from './Engine';
 import { Order } from './types/order.types';
+import { OrderCancelledPayload } from './types/event.types';
 
 describe('MatchingEngine', () => {
   let book: OrderBook;
@@ -186,5 +186,92 @@ describe('MatchingEngine', () => {
     expect(result.events.length).toBe(1);
     expect(result.events[0].eventType).toBe(EventType.ORDER_CANCELLED);
     expect(book.getBestAsk()?.orders[0].remainingQuantity).toBe(4);
+  });
+
+  it('FOK rejection proof: zero trades and no order book mutation', () => {
+    book.add(createOrder('ask1', 'ASK', 50000, 3));
+    book.add(createOrder('ask2', 'ASK', 50500, 4));
+
+    const initialAsksDepth = book.getDepth(10).asks;
+
+    const fokOrder: Order = {
+      ...createOrder('fok-fail', 'BID', 51000, 10),
+      type: 'FOK',
+    };
+
+    const result = MatchingEngine.processOrder(fokOrder, book);
+
+    expect(result.trades).toHaveLength(0);
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].eventType).toBe(EventType.ORDER_CANCELLED);
+    expect(book.getBestBid()).toBeUndefined();
+    expect(book.getDepth(10).asks).toEqual(initialAsksDepth);
+  });
+
+  it('MARKET on empty book: immediately cancelled with zero trades', () => {
+    const marketAsk: Order = {
+      ...createOrder('m-ask', 'ASK', 0, 5),
+      type: 'MARKET',
+    };
+
+    const result = MatchingEngine.processOrder(marketAsk, book);
+
+    expect(result.trades).toHaveLength(0);
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].eventType).toBe(EventType.ORDER_CANCELLED);
+    expect(
+      (result.events[0].payload as OrderCancelledPayload).remainingQuantity,
+    ).toBe(5);
+    expect(book.getBestAsk()).toBeUndefined();
+  });
+
+  it('IOC partial fill proof: trades filled portion and cancels remainder', () => {
+    book.add(createOrder('maker-ask', 'ASK', 50000, 3));
+
+    const iocOrder: Order = {
+      ...createOrder('ioc-order', 'BID', 50000, 7),
+      type: 'IOC',
+    };
+
+    const result = MatchingEngine.processOrder(iocOrder, book);
+
+    expect(result.trades).toHaveLength(1);
+    expect(result.trades[0].quantity).toBe(3);
+
+    const cancelEvent = result.events.find(
+      (e) => e.eventType === EventType.ORDER_CANCELLED,
+    );
+    expect(cancelEvent).toBeDefined();
+    expect(
+      (cancelEvent?.payload as OrderCancelledPayload).remainingQuantity,
+    ).toBe(4);
+    expect(book.getBestBid()).toBeUndefined();
+    expect(book.getBestAsk()).toBeUndefined();
+  });
+
+  it('3 resting orders at same price: incoming sweep fills strictly in arrival order', () => {
+    const o1 = createOrder('first', 'BID', 50000, 5, 1);
+    const o2 = createOrder('second', 'BID', 50000, 5, 2);
+    const o3 = createOrder('third', 'BID', 50000, 5, 3);
+
+    MatchingEngine.processOrder(o1, book);
+    MatchingEngine.processOrder(o2, book);
+    MatchingEngine.processOrder(o3, book);
+
+    const sweepAsk = createOrder('sweep-ask', 'ASK', 50000, 12, 4);
+    const result = MatchingEngine.processOrder(sweepAsk, book);
+
+    expect(result.trades).toHaveLength(3);
+    expect(result.trades[0].makerOrderId).toBe('first');
+    expect(result.trades[0].quantity).toBe(5);
+
+    expect(result.trades[1].makerOrderId).toBe('second');
+    expect(result.trades[1].quantity).toBe(5);
+
+    expect(result.trades[2].makerOrderId).toBe('third');
+    expect(result.trades[2].quantity).toBe(2);
+
+    expect(book.getBestBid()?.orders[0].id).toBe('third');
+    expect(book.getBestBid()?.orders[0].remainingQuantity).toBe(3);
   });
 });

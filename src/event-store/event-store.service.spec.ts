@@ -246,5 +246,73 @@ describe('EventStoreService', () => {
         orderBy: { sequenceId: 'asc' },
       });
     });
+
+    it('should recover correctly from snapshot at event 500 with 1000 total events', async () => {
+      // Simulate a snapshot created at sequence 500 with bids & asks
+      prisma.orderBookSnapshot.findFirst.mockResolvedValue({
+        id: 'snap-1',
+        instrument: INSTRUMENT,
+        lastSequence: 500n,
+        snapshotData: {
+          bids: [{ price: 49000, quantity: 15 }],
+          asks: [{ price: 51000, quantity: 20 }],
+        },
+      });
+
+      // Events after sequence 500
+      prisma.orderEvent.findMany.mockResolvedValue([
+        dbEvent(EventType.ORDER_PLACED, 'post-snap-ask', {
+          side: 'ASK',
+          price: 50500,
+          quantity: 5,
+        }),
+      ]);
+
+      const book = await service.recoverOrderBook(INSTRUMENT);
+
+      expect(prisma.orderEvent.findMany).toHaveBeenCalledWith({
+        where: { instrument: INSTRUMENT, sequenceId: { gt: 500n } },
+        orderBy: { sequenceId: 'asc' },
+      });
+
+      expect(book.getBestBid()?.price).toBe(49000);
+      expect(book.getBestAsk()?.price).toBe(50500);
+      expect(book.getBestAsk()?.orders[0].remainingQuantity).toBe(5);
+    });
+
+    it('should recover correctly when snapshot exists but 0 subsequent events exist', async () => {
+      prisma.orderBookSnapshot.findFirst.mockResolvedValue({
+        id: 'snap-1',
+        instrument: INSTRUMENT,
+        lastSequence: 500n,
+        snapshotData: {
+          bids: [{ price: 48000, quantity: 10 }],
+          asks: [{ price: 52000, quantity: 10 }],
+        },
+      });
+
+      prisma.orderEvent.findMany.mockResolvedValue([]);
+
+      const book = await service.recoverOrderBook(INSTRUMENT);
+
+      expect(book.getBestBid()?.price).toBe(48000);
+      expect(book.getBestAsk()?.price).toBe(52000);
+    });
+
+    it('should gracefully skip unknown or corrupted event type in stream without crashing', async () => {
+      prisma.orderEvent.findMany.mockResolvedValue([
+        dbEvent(EventType.ORDER_PLACED, 'bid-1', {
+          side: 'BID',
+          price: 50000,
+          quantity: 10,
+        }),
+        dbEvent('CORRUPTED_EVENT_TYPE' as any, 'bid-1', {}),
+      ]);
+
+      const book = await service.recoverOrderBook(INSTRUMENT);
+
+      expect(book.getBestBid()?.price).toBe(50000);
+      expect(book.getBestBid()?.orders[0].remainingQuantity).toBe(10);
+    });
   });
 });
