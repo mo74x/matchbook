@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "matchbook.fullname" . }}-config
+  labels:
+    {{- include "matchbook.labels" . | nindent 4 }}
+data:
+  PORT: {{ .Values.service.port | quote }}
+  NODE_ENV: {{ .Values.env.nodeEnv | quote }}
+  USE_REDIS: {{ .Values.env.useRedis | quote }}
+  REDIS_HOST: {{ printf "%s-redis" (include "matchbook.fullname" .) | quote }}
+  REDIS_PORT: {{ .Values.redis.port | quote }}
+  LOG_SAMPLE_RATE: {{ .Values.env.logSampleRate | quote }}
+  THROTTLE_TTL: {{ .Values.env.throttleTtl | quote }}
+  THROTTLE_LIMIT: {{ .Values.env.throttleLimit | quote }}

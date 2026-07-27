@@ -1,0 +1,71 @@
+# Default values for matchbook.
+
+replicaCount: 2
+
+image:
+  repository: matchbook
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 3000
+
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+  hosts:
+    - host: matchbook.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+env:
+  nodeEnv: "production"
+  logSampleRate: "1.0"
+  throttleTtl: "60000"
+  throttleLimit: "100"
+  useRedis: "true"
+
+secrets:
+  databaseUrl: "postgresql://root:password@matchbook-postgres:5432/matchbook?schema=public"
+  apiKey: "matchbook-production-api-key-secret"
+  jwtSecret: "super-secret-jwt-key-change-in-prod"
+
+postgres:
+  enabled: true
+  image: postgres:15-alpine
+  storageSize: 10Gi
+  user: root
+  password: password
+  database: matchbook
+
+redis:
+  enabled: true
+  image: redis:7-alpine
+  port: 6379
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

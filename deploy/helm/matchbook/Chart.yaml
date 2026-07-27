@@ -1,0 +1,13 @@
+apiVersion: v2
+name: matchbook
+description: Helm chart for Matchbook Real-Time Event-Sourced Matching Engine
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - matching-engine
+  - orderbook
+  - event-sourcing
+  - nestjs
+  - postgresql
+  - redis

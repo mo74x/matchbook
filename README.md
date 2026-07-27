@@ -731,6 +731,42 @@ FROM node:20-alpine AS production
 
 ---
 
+## Kubernetes & Helm Deployment
+
+Matchbook supports native cloud orchestration on Kubernetes (EKS, GKE, AKS, Minikube, K3s) via Kustomize manifests (`k8s/`) or a production-ready Helm v3 chart (`deploy/helm/matchbook`).
+
+### 1. Deploy via Kustomize (`kubectl`)
+
+```bash
+# Apply all manifests (Namespace, ConfigMap, Secrets, Postgres, Redis, App, Service, HPA)
+kubectl apply -k k8s/
+```
+
+Verify deployment status:
+
+```bash
+kubectl get all -n matchbook
+```
+
+### 2. Deploy via Helm v3
+
+```bash
+# Install or upgrade the Matchbook Helm chart
+helm upgrade --install matchbook ./deploy/helm/matchbook \
+  --namespace matchbook \
+  --create-namespace \
+  --set replicaCount=3
+```
+
+### Kubernetes Architecture Highlights
+
+- **Liveness & Readiness Probes**: Probes `http://localhost:3000/health` for automatic pod replacement and zero-downtime rolling updates.
+- **HorizontalPodAutoscaler (HPA)**: Automatically scales application pods (2 to 10 replicas) based on CPU (>70%) and Memory (>80%) load.
+- **StatefulSet Data Persistence**: PostgreSQL data is persisted using Kubernetes `PersistentVolumeClaims` (10Gi volume).
+- **Ingress Support**: Helm chart includes optional NGINX Ingress controller template with TLS termination support.
+
+---
+
 ## Running the Benchmark
 
 The benchmark script evaluates in-memory matching engine throughput, cancellation performance, and mixed workloads (70% Place / 20% Cancel / 10% Query) with full percentile profiling (p50, p95, p99):
