@@ -22,6 +22,8 @@ Supports **LIMIT**, **MARKET**, **IOC** (Immediate or Cancel), and **FOK** (Fill
 ![Jest](https://img.shields.io/badge/Jest-Tests-C21325?style=for-the-badge&logo=jest&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-CI/CD-2088FF?style=for-the-badge&logo=github-actions&logoColor=white)
 
+![Matchbook Order Matching Engine & Observability Dashboard](docs/assets/dashboard.png)
+
 ---
 
 ## Table of Contents
